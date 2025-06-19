@@ -138,7 +138,28 @@ Outputs:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
-  PhotosTable:
+PhotosTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: photoId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: photoId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  UploadPhotoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/upload_photo/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          PHOTOS_TABLE: !Ref PhotosTable
+          PHOTOS_BUCKET: !Ref PhotosBucket
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
