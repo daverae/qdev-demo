@@ -10,7 +10,115 @@ Globals:
     MemorySize: 128
 
 Resources:
+PhotosBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3000
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref PhotosBucketKMSKey
+
+  PhotosBucketKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for PhotosBucket encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-default-1
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+
+  PhotosTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: photoId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: photoId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  UploadPhotoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/upload_photo/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          PHOTOS_TABLE: !Ref PhotosTable
+          PHOTOS_BUCKET: !Ref PhotosBucket
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PhotosTable
+        - S3CrudPolicy:
+            BucketName: !Ref PhotosBucket
+        - KMSDecryptPolicy:
+            KeyId: !Ref PhotosBucketKMSKey
+      Events:
+        UploadPhoto:
+          Type: HttpApi
+          Properties:
+            Path: /photos
+            Method: post
+
+  GetPhotoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/get_photo/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          PHOTOS_TABLE: !Ref PhotosTable
+          PHOTOS_BUCKET: !Ref PhotosBucket
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PhotosTable
+        - S3ReadPolicy:
+            BucketName: !Ref PhotosBucket
+        - KMSDecryptPolicy:
+            KeyId: !Ref PhotosBucketKMSKey
+      Events:
+        GetPhoto:
+          Type: HttpApi
+          Properties:
+            Path: /photos/{photoId}
+            Method: get
+
+Outputs:
+  PhotosApi:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  UploadPhotoFunction:
+    Description: "Upload Photo Lambda Function ARN"
+    Value: !GetAtt UploadPhotoFunction.Arn
+  GetPhotoFunction:
+    Description: "Get Photo Lambda Function ARN"
+    Value: !GetAtt GetPhotoFunction.Arn
   PhotosBucket:
+    Description: "S3 bucket for photos"
     Type: AWS::S3::Bucket
     Properties:
       CorsConfiguration:
