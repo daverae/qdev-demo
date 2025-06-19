@@ -109,7 +109,18 @@ def lambda_handler(event, context):
         # Store metadata in DynamoDB
         timestamp = datetime.utcnow().isoformat()
         photos_table = dynamodb.Table(PHOTOS_TABLE)
+# Store metadata in DynamoDB
+        timestamp = datetime.utcnow().isoformat()
+        photos_table = dynamodb.Table(PHOTOS_TABLE)
+        # from boto3.dynamodb.conditions import Attr  # Import Attr for safe attribute handling
         photos_table.put_item(
+            Item={
+                'photoId': Attr('photoId').eq(photo_id),
+                'fileName': Attr('fileName').eq(file_name),
+                'uploadTimestamp': Attr('uploadTimestamp').eq(timestamp),
+                's3Key': Attr('s3Key').eq(s3_key)
+            }
+        )
             Item={
                 'photoId': photo_id,
                 'fileName': file_name,
