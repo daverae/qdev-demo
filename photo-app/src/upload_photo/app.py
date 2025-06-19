@@ -72,7 +72,13 @@ def lambda_handler(event, context):
                     'body': json.dumps({'error': 'Missing file content'})
                 }
                 
+'body': json.dumps({'error': 'Missing file content'})
+                }
+                
+            # TODO: Implement streaming or chunked upload for large files
             file_content = base64.b64decode(file_content_base64)
+        except Exception as e:
+            logger.error(f"Error parsing request body: {str(e)}")
         except Exception as e:
             logger.error(f"Error parsing request body: {str(e)}")
             return {
