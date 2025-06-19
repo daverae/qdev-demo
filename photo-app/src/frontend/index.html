@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .upload-section, .photos-section {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .photo-item {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .photo-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+        }
+        .photo-info {
+            padding: 10px;
+            font-size: 14px;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        .success {
+            color: green;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Photo App</h1>
+    
+    <div class="container">
+        <div class="upload-section">
+            <h2>Upload Photo</h2>
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="photoFile">Select Photo:</label>
+                    <input type="file" id="photoFile" accept="image/*" required>
+                </div>
+                <button type="submit">Upload</button>
+            </form>
+            <div id="uploadStatus"></div>
+        </div>
+        
+        <div class="photos-section">
+            <h2>Your Photos</h2>
+            <button id="refreshBtn">Refresh</button>
+            <div class="photo-grid" id="photoGrid"></div>
+        </div>
+    </div>
+
+    <script>
+        // Replace with your API Gateway URL after deployment
+        const API_URL = 'YOUR_API_GATEWAY_URL';
+        
+        // Store uploaded photos in local storage for demo purposes
+        // In a real app, you would fetch this from the server
+        let uploadedPhotos = JSON.parse(localStorage.getItem('uploadedPhotos')) || [];
+        
+        // Upload form handling
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('photoFile');
+            const statusDiv = document.getElementById('uploadStatus');
+            
+            if (!fileInput.files.length) {
+                statusDiv.innerHTML = '<p class="error">Please select a file</p>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            statusDiv.innerHTML = '<p>Uploading...</p>';
+            
+            try {
+                // Read file as base64
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                
+                reader.onload = async function() {
+                    // Remove the data:image/jpeg;base64, part
+                    const base64Data = reader.result.split(',')[1];
+                    
+                    // Prepare request data
+                    const requestData = {
+                        fileName: file.name,
+                        fileContent: base64Data
+                    };
+                    
+                    try {
+                        // Send to API
+                        const response = await fetch(`${API_URL}/photos`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(requestData)
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        const result = await response.json();
+                        
+                        // Store photo info
+                        const photoInfo = {
+                            photoId: result.photoId,
+                            fileName: result.fileName,
+                            uploadTimestamp: result.uploadTimestamp,
+                            // Store the base64 data for preview (in a real app, you'd use the API)
+                            previewUrl: reader.result
+                        };
+                        
+                        uploadedPhotos.push(photoInfo);
+                        localStorage.setItem('uploadedPhotos', JSON.stringify(uploadedPhotos));
+                        
+                        // Show success and refresh photos
+                        statusDiv.innerHTML = '<p class="success">Photo uploaded successfully!</p>';
+                        displayPhotos();
+                        
+                        // Reset form
+                        document.getElementById('uploadForm').reset();
+                        
+                    } catch (error) {
+                        console.error('Error:', error);
+                        statusDiv.innerHTML = `<p class="error">Upload failed: ${error.message}</p>`;
+                    }
+                };
+                
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = `<p class="error">Upload failed: ${error.message}</p>`;
+            }
+        });
+        
+        // Display photos
+        function displayPhotos() {
+            const photoGrid = document.getElementById('photoGrid');
+            photoGrid.innerHTML = '';
+            
+            if (uploadedPhotos.length === 0) {
+                photoGrid.innerHTML = '<p>No photos uploaded yet.</p>';
+                return;
+            }
+            
+            uploadedPhotos.forEach(photo => {
+                const photoItem = document.createElement('div');
+                photoItem.className = 'photo-item';
+                
+                // In a real app, you would fetch the image using the API
+                // For this demo, we're using the stored base64 data
+                let imageHtml = '';
+                if (photo.previewUrl) {
+                    imageHtml = `<img src="${photo.previewUrl}" alt="${photo.fileName}">`;
+                } else {
+                    // If no preview URL, add a button to fetch it
+                    imageHtml = `<button onclick="fetchPhoto('${photo.photoId}')">Load Photo</button>`;
+                }
+                
+                photoItem.innerHTML = `
+                    ${imageHtml}
+                    <div class="photo-info">
+                        <p>${photo.fileName}</p>
+                        <p>Uploaded: ${new Date(photo.uploadTimestamp).toLocaleString()}</p>
+                    </div>
+                `;
+                
+                photoGrid.appendChild(photoItem);
+            });
+        }
+        
+        // Fetch a photo using the API
+        async function fetchPhoto(photoId) {
+            try {
+                const response = await fetch(`${API_URL}/photos/${photoId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Update the photo with the download URL
+                const photoIndex = uploadedPhotos.findIndex(p => p.photoId === photoId);
+                if (photoIndex !== -1) {
+                    uploadedPhotos[photoIndex].downloadUrl = result.downloadUrl;
+                    localStorage.setItem('uploadedPhotos', JSON.stringify(uploadedPhotos));
+                    
+                    // Open the photo in a new tab
+                    window.open(result.downloadUrl, '_blank');
+                }
+                
+            } catch (error) {
+                console.error('Error fetching photo:', error);
+                alert(`Failed to fetch photo: ${error.message}`);
+            }
+        }
+        
+        // Refresh button
+        document.getElementById('refreshBtn').addEventListener('click', function() {
+            displayPhotos();
+        });
+        
+        // Initial display
+        displayPhotos();
+        
+        // Instructions for first-time users
+        if (uploadedPhotos.length === 0) {
+            document.getElementById('uploadStatus').innerHTML = 
+                '<p>Welcome! Upload your first photo to get started.</p>' +
+                '<p>Note: Before using this app, replace "YOUR_API_GATEWAY_URL" in the JavaScript code with your actual API Gateway URL after deployment.</p>';
+        }
+    </script>
+</body>
+</html>
